@@ -8,7 +8,7 @@ app_icon = "octicon octicon-file-directory"
 app_color = "grey"
 app_email = "support@agritheory.dev"
 app_license = "MIT"
-required_apps = ["erpnext", "hrms"]
+required_apps = ["erpnext"]
 
 # Includes in <head>
 # ------------------
@@ -37,7 +37,7 @@ app_include_js = [
 
 # include js in doctype views
 doctype_js = {
-	"Employee": "public/js/custom/employee_custom.js",
+	# "Employee": "public/js/custom/employee_custom.js",
 	"Payment Entry": "public/js/custom/payment_entry_custom.js",
 	"Supplier": "public/js/custom/supplier_custom.js",
 }
@@ -123,7 +123,8 @@ doc_events = {
 	"Purchase Invoice": {
 		"before_cancel": ["check_run.check_run.disallow_cancellation_if_in_check_run"]
 	},
-	"Expense Claim": {"before_cancel": ["check_run.check_run.disallow_cancellation_if_in_check_run"]},
+    # removed hrms
+	# "Expense Claim": {"before_cancel": ["check_run.check_run.disallow_cancellation_if_in_check_run"]},
 	"Journal Entry": {"before_cancel": ["check_run.check_run.disallow_cancellation_if_in_check_run"]},
 }
 

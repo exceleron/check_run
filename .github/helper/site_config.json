@@ -14,7 +14,6 @@
     "host_name": "http://test_site:8000",
     "install_apps": [
         "erpnext",
-        "hrms",
         "check_run"
     ],
     "throttle_user_limit": 100,

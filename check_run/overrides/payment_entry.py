@@ -21,11 +21,12 @@ from erpnext.accounts.general_ledger import (
 	validate_against_pcv,
 	validate_disabled_accounts,
 )
-from erpnext.accounts.utils import get_payment_ledger_entries, is_immutable_ledger_enabled
 from frappe import _, safe_decode
 from frappe.core.doctype.file.utils import get_local_image
 from frappe.utils import flt, get_link_to_form, now
 from frappe.utils.data import getdate
+from erpnext.accounts.utils import get_payment_ledger_entries
+from erpnext.accounts.general_ledger import is_immutable_ledger_enabled
 
 
 class CheckRunPaymentEntry(PaymentEntry):

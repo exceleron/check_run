@@ -6,7 +6,6 @@ import json
 import frappe
 from erpnext.accounts.doctype.journal_entry.journal_entry import JournalEntry
 from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import PurchaseInvoice
-from hrms.hr.doctype.expense_claim.expense_claim import ExpenseClaim
 
 
 @frappe.whitelist()
@@ -20,7 +19,7 @@ def show_bank_account_number(doctype: str, docname: str) -> dict:
 
 @frappe.whitelist()
 def disallow_cancellation_if_in_check_run(
-	doc: PurchaseInvoice | JournalEntry | ExpenseClaim, method: str | None = None
+	doc: PurchaseInvoice | JournalEntry , method: str | None = None
 ) -> None:
 	draft_check_runs = frappe.get_all("Check Run", ["name", "transactions"], {"docstatus": 0})
 	for draft_check_run in draft_check_runs:

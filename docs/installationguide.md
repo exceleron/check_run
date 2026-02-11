@@ -25,7 +25,6 @@ bench get-app erpnext --branch version-13
 # Version 14
 bench get-app payments
 bench get-app erpnext --branch version-14
-bench get-app hrms
 ```
 
 Download the Check Run application
@@ -35,7 +34,7 @@ bench get-app check_run git@github.com:agritheory/check_run.git
 
 Install the apps to your site
 ```shell
-bench --site {{ site name }} install-app erpnext hrms check_run
+bench --site {{ site name }} install-app erpnext check_run
 
 # Optional: Check that all apps installed on your site
 bench --site {{ site name }} list-apps

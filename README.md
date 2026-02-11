@@ -24,9 +24,9 @@ bench new-site {{ site name }} --force --db-name {{ site name }}
 
 Download the ERPNext app
 ```shell
-# Version 14
-bench get-app erpnext --branch version-14
-bench get-app hrms --branch version-14
+# Version 15
+bench get-app erpnext --branch version-15
+bench get-app --branch version-15
 ```
 
 Download the Time and Expense application
@@ -36,7 +36,7 @@ bench get-app check_run https://github.com/agritheory/check_run
 
 Install the apps to your site
 ```shell
-bench --site {{ site name }} install-app erpnext hrms check_run
+bench --site {{ site name }} install-app erpnext check_run
 
 # Optional: Check that all apps installed on your site
 bench --site {{ site name }} list-apps
