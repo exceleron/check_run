@@ -100,8 +100,7 @@ after_migrate = "check_run.customize.load_customizations"
 override_doctype_class = {
 	# "Bank": "check_run.overrides.bank.CustomBank",
 	"Payment Entry": "check_run.overrides.payment_entry.CheckRunPaymentEntry",
-    "check_run.check_run.doctype.check_run.check_run.process_check_run": "exceleron_fund.exfund_check_run.process_check_run",
-    "check_run.check_run.doctype.check_run.check_run.get_entries": "exceleron_fund.exfund_check_run.process_get_entries",
+
 }
 # Document Events
 # ---------------

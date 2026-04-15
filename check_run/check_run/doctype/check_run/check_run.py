@@ -15,6 +15,7 @@ from frappe.desk.form.load import get_attachments
 from frappe.desk.query_report import build_xlsx_data, format_fields, run
 from frappe.desk.utils import get_csv_bytes, pop_csv_params
 from frappe.model.document import Document
+from frappe.utils import cint
 from frappe.permissions import has_permission
 from frappe.query_builder.custom import ConstantColumn
 from frappe.query_builder.functions import Coalesce, NullIf, Sum
@@ -199,26 +200,53 @@ class CheckRun(Document):
 				"Please check; maybe you have not selected any document to pay, or the selected document has already been paid.<br><br>Kindly refresh the page."
 			)
 			return
-		# if len(transactions) < 1:
-		# 	frappe.throw(frappe._("You must select at least one Invoice to pay."))
 		self.print_count = 0
 		if self.ach_only().ach_only:
 			self.initial_check_number = ""  # type: ignore
 			self.final_check_number = ""
-		frappe.enqueue_doc(
-			self.doctype, self.name, "_process_check_run", save=True, queue="short", timeout=3600, now=True
-		)
 
-	def _process_check_run(self, save: bool = False) -> None:
+		# Fetch settings to determine whether balance validation is required
+		settings = get_check_run_settings(self)
+		include_payment_validation = cint(settings.get("include_payment_validation")) == 1 if settings else False
+		frappe.enqueue_doc(
+			self.doctype,
+			self.name,
+			"_process_check_run",
+			save=True,
+			queue="short",
+			timeout=3600,
+			now=True,
+			include_payment_validation=include_payment_validation,
+		)
+	def _process_check_run(
+		self, save: bool = False, include_payment_validation: bool = False
+	) -> None:
 		frappe.defaults.set_global_default("check_run_submitting", self.name)
 		frappe.db.sql("SAVEPOINT process_check_run")
 		try:
 			__transactions = self.transactions
 			_transactions = json.loads(__transactions)
-			transactions = sorted(
-				(frappe._dict(item) for item in _transactions if item.get("pay")), key=lambda x: x.party
+
+			# Filter only selected (payable) transactions
+			payable_transactions = sorted(
+				(frappe._dict(item) for item in _transactions if item.get("pay")),
+				key=lambda x: x.party,
 			)
-			_transactions = self.create_payment_entries(transactions)
+
+			# --- Bank-balance validation (custom: include_payment_validation) ---
+			if include_payment_validation:
+				total_amount = sum(flt(txn.amount) for txn in payable_transactions)
+				bank_balance = flt(self.beg_balance)
+				if total_amount > bank_balance:
+					frappe.throw(
+						frappe._(
+							f"Total payment amount ({total_amount}) exceeds "
+							f"available bank balance ({bank_balance})."
+						)
+					)
+			# -------------------------------------------------------------------
+
+			_transactions = self.create_payment_entries(payable_transactions)
 		except Exception as e:
 			try:
 				frappe.db.rollback(save_point="process_check_run")
@@ -649,7 +677,9 @@ def get_entries(doc: CheckRun | str) -> dict:
 	doc = frappe._dict(json.loads(doc)) if isinstance(doc, str) else doc  # type: ignore
 	if isinstance(doc.end_date, str):
 		doc.end_date = getdate(doc.end_date)  # type: ignore
-		doc.posting_date = getdate(doc.posting_date)  # type: ignore
+	# Always normalise posting_date regardless of end_date type (custom fix)
+	doc.posting_date = getdate(doc.posting_date)  # type: ignore
+
 	modes_of_payment = [""] + frappe.get_all("Mode of Payment", order_by="name", pluck="name")
 	if frappe.db.exists(
 		"Check Run Settings", {"bank_account": doc.bank_account, "pay_to_account": doc.pay_to_account}
@@ -657,6 +687,8 @@ def get_entries(doc: CheckRun | str) -> dict:
 		settings = frappe.get_doc(
 			"Check Run Settings", {"bank_account": doc.bank_account, "pay_to_account": doc.pay_to_account}
 		)
+		# hrms-removal 2026: expense claims are no longer included
+		settings.include_expense_claims = 0
 	else:
 		settings = None
 	db_doc = None
@@ -682,6 +714,9 @@ def get_entries(doc: CheckRun | str) -> dict:
 	payment_schedule = frappe.qb.DocType("Payment Schedule")
 	purchase_invoices = frappe.qb.DocType("Purchase Invoice")
 	suppliers = frappe.qb.DocType("Supplier")
+	payment_entry = frappe.qb.DocType("Payment Entry")
+	payment_entry_reference = frappe.qb.DocType("Payment Entry Reference")
+
 	supplier_mop_sub_query = (
 		frappe.qb.from_(suppliers)
 		.select(suppliers.supplier_default_mode_of_payment)
@@ -693,6 +728,18 @@ def get_entries(doc: CheckRun | str) -> dict:
 		if settings.allow_stand_alone_debit_notes == "No"
 		else (Coalesce(payment_schedule.outstanding, purchase_invoices.outstanding_amount) != 0)
 	)
+
+	# Subquery: Purchase Invoices already fully settled via a submitted Payment Entry
+	already_paid_pi_subquery = (
+		frappe.qb.from_(payment_entry_reference)
+		.inner_join(payment_entry)
+		.on(payment_entry.name == payment_entry_reference.parent)
+		.select(payment_entry_reference.reference_name)
+		.where(payment_entry_reference.reference_doctype == "Purchase Invoice")
+		.where(payment_entry.docstatus == 1)
+		.where(payment_entry.party == purchase_invoices.supplier)
+	)
+
 	pi_qb = (
 		frappe.qb.from_(purchase_invoices)
 		.left_join(payment_schedule)
@@ -722,6 +769,8 @@ def get_entries(doc: CheckRun | str) -> dict:
 		.where(purchase_invoices.credit_to == pay_to_account)
 		.where(purchase_invoices.status != "Debit Note Issued")
 		.where(Coalesce(purchase_invoices.release_date, datetime.date(1900, 1, 1)) < end_date)
+		# Exclude invoices already fully settled via a submitted Payment Entry
+		.where(purchase_invoices.name.notin(already_paid_pi_subquery))
 	)
 
 	# Build expense claims query
